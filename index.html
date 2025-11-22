@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Hand Pose Estimation</title>
+	<style>
+		body { font-family:sans-serif; text-align:center; }
+		canvas { border:1px solid #ccc; }
+		#thumb { font-size:20px; margin-top:10px; display:block; }
+	</style>
+	<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+	<script type="module">
+		import { HandLandmarker, FilesetResolver }
+			from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
+
+		let video, canvas, ctx, handLandmarker;
+
+
+        // Example array of text items
+let notes = ["G","A","B","C","D","E","F","G","A","B","C"];
+let leftFreqs = [
+	98.00,   // G2
+	110.00,  // A2
+	123.47,  // B2
+	130.81,  // C3
+	146.83,  // D3
+	164.81,  // E3
+	174.61,  // F3
+	196.00,  // G3
+	220.00,  // A3
+	246.94,  // B3
+	261.63,  // C4
+];
+
+
+            
+            let leftVol=0;
+            let rightVol=0;
+let rightFreqs = leftFreqs.map(f => f * 2); // one octave higher
+
+
+
+notes=notes.reverse();
+let n=notes.length;
+
+function drawOverlayBoxes() {
+	const boxWidth = canvas.width * 0.4;
+	const boxXRight = canvas.width - boxWidth;
+	const boxXLeft = 0;
+	const boxHeight = canvas.height / notes.length;
+
+	ctx.save();
+
+	// Draw right and left boxes
+	notes.forEach((text, idx) => {
+		const y = idx * boxHeight;
+
+		// Translucent blue box (right)
+		ctx.fillStyle = "rgba(0, 128, 255, 0.25)";
+        ctx.font = "bold 24px sans-serif";  // bigger and bold
+
+		ctx.fillRect(boxXRight, y, boxWidth, boxHeight);
+
+		// Translucent blue box (left)
+		ctx.fillRect(boxXLeft, y, boxWidth, boxHeight);
+
+		// Outline in black
+		ctx.strokeStyle = "black";
+		ctx.lineWidth = 2;
+		ctx.strokeRect(boxXRight, y, boxWidth, boxHeight);
+		ctx.strokeRect(boxXLeft, y, boxWidth, boxHeight);
+
+		// Draw centered text (right)
+		ctx.fillStyle = "white";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(text, boxXRight + boxWidth / 2, y + boxHeight / 2);
+
+		// Draw centered text (left)
+		ctx.fillText(text, boxXLeft + boxWidth / 2, y + boxHeight / 2);
+	});
+
+	// Draw translucent full-height red boxes
+	ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+	ctx.fillRect(canvas.width * 0.4, 0, canvas.width * 0.1, canvas.height); // 0.4-0.5
+	ctx.fillRect(canvas.width * 0.5, 0, canvas.width * 0.1, canvas.height); // 0.5-0.6
+ctx.strokeStyle = "black";
+ctx.lineWidth = 2;
+ctx.strokeRect(canvas.width * 0.4, 0, canvas.width * 0.1, canvas.height);
+ctx.strokeRect(canvas.width * 0.5, 0, canvas.width * 0.1, canvas.height);
+
+	ctx.restore();
+}
+
+
+
+		const start = async () => {
+			canvas = $("#canvas")[0];
+			ctx = canvas.getContext("2d");
+
+			canvas.width = 640;
+			canvas.height = 480;
+
+			video = document.createElement("video");
+			video.setAttribute("playsinline", "");
+			video.muted = true;
+
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: { facingMode: "user", width: 640, height: 480 }
+			});
+			video.srcObject = stream;
+			await video.play();
+
+			const vision = await FilesetResolver.forVisionTasks(
+				"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+			);
+
+			handLandmarker = await HandLandmarker.createFromOptions(vision, {
+				baseOptions: {
+					modelAssetPath:
+						"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+				},
+				numHands: 2,
+				runningMode: "VIDEO"
+			});
+
+			loop();
+		};
+
+        const loop = () => {
+	const now = performance.now();
+
+	// draw mirrored camera feed
+	ctx.save();
+	ctx.scale(-1, 1);
+	ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+	ctx.restore();
+
+	const res = handLandmarker.detectForVideo(video, now);
+
+	if (res.landmarks && res.landmarks.length > 0) {
+		ctx.save();
+		ctx.scale(-1, 1);
+
+		res.landmarks.forEach((hand, idx) => {
+			const handLabel = res.handedness ? res.handedness[idx].categoryName : `Hand ${idx+1}`;
+
+            console.log('hands ' + res.landmarks.length)
+			// Use current hand to get thumb
+			const thumb = hand[4];
+
+
+            const thumbHt=1-hand[4].y;
+            
+            let note=Math.floor(thumbHt*n)
+
+				
+            //$("#thumbs").text(thumbHt);
+			console.log(thumb.x);
+            
+            if(thumb.x < 0.6 && thumb.x > 0.5){
+                leftVol=0; 
+            }
+            if(thumb.x > 0.4 && thumb.x < 0.5){
+                rightVol=0; 
+            }
+                if(thumb.x < 0.4){
+                    rightVol=1
+                    oscRight.frequency.rampTo(rightFreqs[note], 0.1);
+
+                }
+                if (thumb.x > 0.6) {
+                    leftVol=1;
+                    oscLeft.frequency.rampTo(leftFreqs[note], 0.1);
+                }
+                
+                console.log(rightVol);
+                gainLeft.gain.rampTo(leftVol, .05);
+                gainRight.gain.rampTo(rightVol, .05);
+
+			const color = handLabel === "Right" ? "red" : "blue";
+
+			hand.forEach(pt => {
+				const mirroredX = (1 - pt.x) * canvas.width;
+				const y = pt.y * canvas.height;
+
+				ctx.beginPath();
+				ctx.arc(-mirroredX, y, 5, 0, Math.PI*2);
+				ctx.fillStyle = color;
+				ctx.fill();
+			});
+		});
+
+		ctx.restore();
+	}
+
+    drawOverlayBoxes();
+	requestAnimationFrame(loop);
+};
+
+
+
+		$(start);
+
+
+
+
+
+
+
+
+
+
+
+        //sound
+
+
+        let leftInputF = 261.625565;
+let rightInputF = 329.63;
+
+let gainLeft = new Tone.Gain(0.5).toDestination();
+
+let gainRight = new Tone.Gain(0.5).toDestination();
+
+const oscLeft = new Tone.FMOscillator({
+    frequency: rightInputF,
+    modulationFrequency: 8,
+    harmonicity: 1.01,
+    type: "sine",
+	modulationIndex: 1
+}).connect(gainLeft);
+
+const oscRight = new Tone.FMOscillator({
+    frequency: rightInputF,
+    modulationFrequency: 8,
+    harmonicity: 1.01,
+    type: "sine",
+	modulationIndex: 1
+}).connect(gainRight);
+
+document.getElementById("playBtn").addEventListener("click", async () => {
+    await Tone.start();
+    
+    oscLeft.start();
+    oscRight.start();
+});
+
+
+document.getElementById("stop").addEventListener("click", () => {
+    oscLeft.stop();
+    oscRight.stop();
+});
+
+
+
+
+	</script>
+</head>
+<body>
+	<h2>camera two handed theremin</h2>
+	<canvas id="canvas"></canvas><br>
+	<span id="thumbs">Thumb:</span><br>
+
+
+
+<button id="playBtn">Play</button>
+<button id="stop">Stop</button>
+
+</body>
+</html>
