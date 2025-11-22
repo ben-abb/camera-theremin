@@ -6,7 +6,8 @@
 	<style>
 		body { font-family:sans-serif; text-align:center; }
 		canvas { border:1px solid #ccc; }
-		#thumb { font-size:20px; margin-top:10px; display:block; }
+		#thumbs { font-size:20px;display:inline-block; width:400px;}
+		#playBtn{width:200px;background:green;color:white;}
 	</style>
 	<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
@@ -260,7 +261,7 @@ document.getElementById("stop").addEventListener("click", () => {
 <body>
 	<h2>camera two handed theremin</h2>
 	<canvas id="canvas"></canvas><br>
-	<span id="thumbs">Thumb:</span><br>
+	<span id="thumbs">Allow camera access. Hold your thumbs towards each other in the air. Place your computer and camera so that you can comfortably move your thumbs up and down the entire view of the camera feed. Move your thums over the boxes to play notes. One thumb on each side. Move your thumb into the red zone to stop playing on that side. Don't cross your thumbs over the center of the screen between the red zones.<br><b>Press play to begin.</b></span><br>
 
 
 
